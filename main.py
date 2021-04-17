@@ -79,6 +79,7 @@ class MainProgram(QWidget):
         self.newQuestionCodeStore = QuestionCode("AA")
         self.currQuestionDict = {}
         self.currCorrectAnswerIndex = ""
+        self.tempPlayerPointsDict = {}
 
         self.lockPage = QWidget()
         self.facilStartPage = QWidget()
@@ -89,6 +90,7 @@ class MainProgram(QWidget):
         self.loginPage = QWidget()
         self.enterQuestionCodePage = QWidget()
         self.questionPlayPage = QWidget()
+        self.collapsePage = QWidget()
 
         self.lockPageUI()
         self.facilStartPageUI()
@@ -99,6 +101,7 @@ class MainProgram(QWidget):
         self.loginPageUI()
         self.enterQuestionCodePageUI()
         self.questionPlayPageUI()
+        self.collapsePageUI()
 
         self.refreshQuestionList()
 
@@ -111,6 +114,7 @@ class MainProgram(QWidget):
         self.pageStack.addWidget(self.loginPage)
         self.pageStack.addWidget(self.enterQuestionCodePage)
         self.pageStack.addWidget(self.questionPlayPage)
+        self.pageStack.addWidget(self.collapsePage)
         self.show()
 
     def calcPoints(self):
@@ -125,10 +129,11 @@ class MainProgram(QWidget):
             return False
     
     def setPlayerAccount(self, accName, changeDict):
-        req = ref.child("Players").child(accName)
-        got = req.get()
+        got = ref.child("Players").child(accName).get()
         if got is not None:
-            req.update(changeDict)
+            gotDict = json.loads(got)
+            gotDict.update(changeDict)
+            ref.child("Players").update({accName: json.dumps(gotDict)})
             return True
         else:
             self.errBox("No such player!")
@@ -226,6 +231,13 @@ class MainProgram(QWidget):
     def goTo_QuestionPlayPage(self):
         self.prepQuestionPlayPage()
         self.pageStack.setCurrentWidget(self.questionPlayPage)
+    def goTo_CollapsePage(self):
+        self.setWinnings()
+        self.pageStack.setCurrentWidget(self.collapsePage)
+    
+    def abortGameInProgress(self):
+        self.noticeBox("Game aborted! No scores have changed.")
+        self.pageStack.setCurrentWidget(self.playerAdmissionsPage)
 
     def attemptLogin(self):
         accName = self.loginPage.nameInput.text()
@@ -239,8 +251,8 @@ class MainProgram(QWidget):
             if accPassword != gotDict["Password"]:
                 return self.errBox("Password is incorrect.")
             self.addReadyPlayer(accName)
-            self.readyPlayerNameList.append(accName)
             self.readyPlayerDict[accName] = gotDict
+            print(self.readyPlayerNameList)
             return self.successBox("Player {accName} ready.".format(accName=accName))
         else:
             return self.errBox("No such account! Try creating an account first.")
@@ -389,6 +401,10 @@ class MainProgram(QWidget):
             return self.successBox("New Question Submitted")
 
     def cyclePlayerTurn(self):
+        print("_________")
+        print(self.readyPlayerNameList)
+        print(self.currPlayerName)
+        print(self.currPlayerIndex)
         if self.currPlayerIndex < len(self.readyPlayerNameList) - 1:
             self.currPlayerIndex += 1
         else:
@@ -397,10 +413,19 @@ class MainProgram(QWidget):
         self.currPlayerName = self.readyPlayerNameList[self.currPlayerIndex]
         self.currPlayerDict = self.readyPlayerDict[self.currPlayerName]
         self.enterQuestionCodePage.currPlayerTurnDisplay.setText(self.currPlayerName)
+        print(self.currPlayerName)
+        print("_________")
 
 
     def startNewGame(self):
-        self.enterQuestionCodePage.currPlayerTurnDisplay.setText(self.readyPlayerNameList[0])
+        for name in self.readyPlayerNameList:
+            self.tempPlayerPointsDict[name] = 0
+
+        self.currPlayerName = random.choice(self.readyPlayerNameList)
+        self.currPlayerDict = self.readyPlayerDict[self.currPlayerName]
+        self.currPlayerIndex = self.readyPlayerNameList.index(self.currPlayerName)
+
+        self.enterQuestionCodePage.currPlayerTurnDisplay.setText(self.currPlayerName)
         self.goTo_EnterQuestionCodePage()
 
     def submitQuestionCode(self):
@@ -408,18 +433,14 @@ class MainProgram(QWidget):
         searchCodeString = self.enterQuestionCodePage.enterQuestionInput.text()
         for questionKey, questionDictString in self.localQuestionList.items():
             questionDict = json.loads(questionDictString)
-            print(searchCodeString)
-            print(questionDict)
             if searchCodeString == questionDict["QuestionCode"]:
                 matchList.append(questionKey)
-        print(self.localQuestionList)
-        print(matchList)
         matchLength = len(matchList)
         if matchLength > 0:
             randptr = random.randint(0, len(matchList) - 1)
-            self.currQuestionDict = self.localQuestionList[matchList[randptr]]
+            self.currQuestionDict = json.loads(self.localQuestionList[matchList[randptr]])
             self.currCorrectAnswerIndex = self.currQuestionDict["CorrectAnswerIndex"]
-            return
+            self.goTo_QuestionPlayPage()
         else:
             return self.errBox("No matching questions!")
     
@@ -427,8 +448,9 @@ class MainProgram(QWidget):
         self.questionPlayPage.titleDisplay.clear()
         self.questionPlayPage.contentDisplay.clear()
         self.questionPlayPage.choiceList.clear()
+        self.questionPlayPage.playerScores.clear()
 
-        activeQuestionDict = json.loads(self.currQuestionDict)
+        activeQuestionDict = self.currQuestionDict
         activeTitle = activeQuestionDict["Title"]
         activeContent = activeQuestionDict["Content"]
 
@@ -438,18 +460,51 @@ class MainProgram(QWidget):
         choices = activeQuestionDict["AnswerList"]
         for choice in choices:
             self.questionPlayPage.choiceList.addItem(choice)
+        
+        self.questionPlayPage.playerScores.setText(self.allPlayerTempPoints())
     
     def submitPlayQuestion(self):
-        currChoice = self.questionPlayPage.choiceList.selectedItems()
-        if self.currCorrectAnswerIndex == currChoice:
+        currChoice = self.questionPlayPage.choiceList.selectedItems()[0].text()
+        correctAns = self.currQuestionDict["AnswerList"][self.currQuestionDict["CorrectAnswerIndex"]]
+        print(currChoice)
+        print(correctAns)
+        if correctAns == currChoice:
             pointsToAdd = self.calcPoints()
-            currPoints = self.currPlayerDict["Points"]
-            newPoints = currPoints + pointsToAdd
-            self.successBox("Correct! Player {currPlayer} gets {points} points.".format(currPlayer=self.currPlayerName, points=newPoints))
-            self.setPlayerAccount(self.currPlayerName, {"Points": newPoints})
+            self.tempPlayerPointsDict[self.currPlayerName] += pointsToAdd
+            self.successBox("Correct! Player {currPlayer} gets {pointsToAdd} points for a total of {newPoints}.".format(currPlayer=self.currPlayerName, pointsToAdd=pointsToAdd, newPoints=self.tempPlayerPointsDict[self.currPlayerName]))
         else:
             self.noticeBox("Wrong answer!")
         
+        self.cyclePlayerTurn()
+        self.goTo_EnterQuestionCodePage()
+
+    def setWinnings(self):
+        sortedScoreList = sorted(self.tempPlayerPointsDict, key=self.tempPlayerPointsDict.get)
+        winnerName = sortedScoreList[-1]
+        winnerEarnings = self.tempPlayerPointsDict[winnerName]
+        newWinnerTotalPoints = self.readyPlayerDict[winnerName]["Points"] + winnerEarnings
+
+        winnerDict = self.readyPlayerDict[winnerName]
+
+        winnerDict.update({"Points": newWinnerTotalPoints})
+        self.readyPlayerDict.update({winnerName: winnerDict})
+        self.setPlayerAccount(winnerName, winnerDict)
+
+        self.collapsePage.scoreBoard.setText(self.allPlayerTotalPoints())
+        self.collapsePage.winnerDisplay.setText(winnerName)
+        return self.successBox("{winner} has won for a new total of {newPoints} points!".format(winner=winnerName, newPoints=newWinnerTotalPoints))
+        
+    def allPlayerTempPoints(self):
+        res = ""
+        for accName, points in self.tempPlayerPointsDict.items():
+            res += accName + ": " + str(points) + "\n"
+        return res
+
+    def allPlayerTotalPoints(self):
+        res = ""
+        for accName, accDict in self.readyPlayerDict.items():
+            res += accName + ": " + str(accDict["Points"]) + "\n"
+        return res
 
 
     def lockPageUI(self):
@@ -666,17 +721,41 @@ class MainProgram(QWidget):
         layout = QFormLayout()
 
         self.questionPlayPage.titleDisplay = QLabel()
+        layout.addRow(self.questionPlayPage.titleDisplay)
+
         self.questionPlayPage.contentDisplay = QLabel()
-        layout.addRow(self.questionPlayPage.titleDisplay, self.questionPlayPage.contentDisplay)
+        layout.addRow(self.questionPlayPage.contentDisplay)
 
         self.questionPlayPage.choiceList = QListWidget()
-        layout.addRow(self.questionPlayPage.choiceList)
+        self.questionPlayPage.playerScores = QLabel()
+        layout.addRow(self.questionPlayPage.choiceList, self.questionPlayPage.playerScores)
 
         self.questionPlayPage.chooseButton = QPushButton("&Submit")
         self.questionPlayPage.chooseButton.clicked.connect(self.submitPlayQuestion)
         layout.addRow(self.questionPlayPage.chooseButton)
 
+        self.questionPlayPage.collapseButton = QPushButton("Collapse!")
+        self.questionPlayPage.collapseButton.clicked.connect(self.goTo_CollapsePage)
+        self.questionPlayPage.abortButton = QPushButton("Abort")
+        self.questionPlayPage.abortButton.clicked.connect(self.abortGameInProgress)
+        layout.addRow(self.questionPlayPage.collapseButton, self.questionPlayPage.abortButton)
+
         self.questionPlayPage.setLayout(layout)
+
+    def collapsePageUI(self):
+        layout = QFormLayout()
+
+        self.collapsePage.scoreBoard = QLabel()
+        layout.addRow(self.collapsePage.scoreBoard)
+
+        self.collapsePage.winnerDisplay = QLabel()
+        layout.addRow(self.collapsePage.winnerDisplay)
+
+        self.collapsePage.backButton = QPushButton("Back")
+        self.collapsePage.backButton.clicked.connect(self.goTo_PlayerAdmissionsPage)
+        layout.addRow(self.collapsePage.backButton)
+
+        self.collapsePage.setLayout(layout)
 
 app = QApplication(sys.argv)
 mainProgram = MainProgram()
