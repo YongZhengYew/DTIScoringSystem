@@ -14,24 +14,18 @@ default_app = firebase_admin.initialize_app(cred, {
 ref = db.reference("/")
 
 class QuestionCode():
-    staticSubjectParamDirectory = {
-        "A": "Subject1",
-        "B": "Subject2"
+    staticColorParamDirectory = {
+        "A": "Yellow",
+        "B": "Blue",
+        "C": "Red"
     }
 
-    staticDifficultyParamDirectory = {
-        "A": "Easy",
-        "B": "Medium",
-        "C": "Hard"
-    }
-
-    staticCount = 2
+    staticCount = 1
 
     def __init__(self, codeString):
         self.codeString = codeString
         self.params = {
-            "Subject": QuestionCode.staticSubjectParamDirectory[codeString[0]],
-            "Difficulty": QuestionCode.staticDifficultyParamDirectory[codeString[1]],
+            "Color": QuestionCode.staticColorParamDirectory[codeString[0]],
         }
         self.paramKeyList = list(self.params)
 
@@ -49,13 +43,9 @@ class QuestionCode():
         newCodeString[index] = newThing
         self.codeString = "".join(newCodeString)
 
-    def changeSubject(self, newSubject):
-        self.params["Subject"] = QuestionCode.staticSubjectParamDirectory[newSubject]
-        self.refreshCodeString(0, newSubject)
-
-    def changeDifficulty(self, newDifficulty):
-        self.params["Difficulty"] = QuestionCode.staticDifficultyParamDirectory[newDifficulty]
-        self.refreshCodeString(1, newDifficulty)
+    def changeColor(self, newColor):
+        self.params["Color"] = QuestionCode.staticColorParamDirectory[newColor]
+        self.refreshCodeString(0, newColor)
 
     def getParams(self):
         return self.params
@@ -65,8 +55,8 @@ class MainProgram(QWidget):
         super().__init__()
         self.FILE_EXTENSION_PLAYERACCOUNT = ".playerAccount"
         self.FILE_EXTENSION_FACILACCOUNT = ".facilAccount"
-        self.setWindowTitle("Hello there")
-        self.resize(1600, 1200)
+        self.setWindowTitle("Blok Kayu!")
+        self.resize(1200, 1000)
 
         self.pageStack = QStackedWidget(self)
         self.readyPlayerDict = {}
@@ -76,10 +66,11 @@ class MainProgram(QWidget):
         self.currPlayerDict = {}
         self.localQuestionList = {}
         self.definedCorrectAnswerStore = 0
-        self.newQuestionCodeStore = QuestionCode("AA")
+        self.newQuestionCodeStore = QuestionCode("A")
         self.currQuestionDict = {}
         self.currCorrectAnswerIndex = ""
         self.tempPlayerPointsDict = {}
+        self.enterQuestionInput = ""
 
         self.lockPage = QWidget()
         self.facilStartPage = QWidget()
@@ -354,22 +345,24 @@ class MainProgram(QWidget):
         print(definedCorrectAnswerIndex)
         self.definedCorrectAnswerStore = definedCorrectAnswerIndex
         self.questionBankPage.definedNewCorrectAnswerDisplay.setText(self.questionBankPage.newQuestionAnswerList.currentItem().text())
-
-    def subjectRadioToggle(self):
-        if self.questionBankPage.subject1Radio.isChecked():
-            self.newQuestionCodeStore.changeSubject("A")
-        if self.questionBankPage.subject2Radio.isChecked():
-            self.newQuestionCodeStore.changeSubject("B")
-        print(self.newQuestionCodeStore.getCodeString())
         
-    def difficultyRadioToggle(self):
-        if self.questionBankPage.easyRadio.isChecked():
-            self.newQuestionCodeStore.changeDifficulty("A")
-        if self.questionBankPage.mediumRadio.isChecked():
-            self.newQuestionCodeStore.changeDifficulty("B")
-        if self.questionBankPage.hardRadio.isChecked():
-            self.newQuestionCodeStore.changeDifficulty("C")
+    def colorRadioToggle(self):
+        if self.questionBankPage.yellowRadio.isChecked():
+            self.newQuestionCodeStore.changeColor("A")
+        if self.questionBankPage.blueRadio.isChecked():
+            self.newQuestionCodeStore.changeColor("B")
+        if self.questionBankPage.redRadio.isChecked():
+            self.newQuestionCodeStore.changeColor("C")
         print(self.newQuestionCodeStore.getCodeString())
+
+    def enterColorRadioToggle(self):
+        if self.enterQuestionCodePage.yellowRadio.isChecked():
+            self.enterQuestionInput = "A"
+        if self.enterQuestionCodePage.blueRadio.isChecked():
+            self.enterQuestionInput = "B"
+        if self.enterQuestionCodePage.redRadio.isChecked():
+            self.enterQuestionInput = "C"
+        print(self.enterQuestionInput)
 
     def submitNewAnswer(self):
         self.questionBankPage.newQuestionAnswerList.addItem(self.questionBankPage.newQuestionAnswerInput.text())
@@ -430,7 +423,7 @@ class MainProgram(QWidget):
 
     def submitQuestionCode(self):
         matchList = []
-        searchCodeString = self.enterQuestionCodePage.enterQuestionInput.text()
+        searchCodeString = self.enterQuestionInput
         for questionKey, questionDictString in self.localQuestionList.items():
             questionDict = json.loads(questionDictString)
             if searchCodeString == questionDict["QuestionCode"]:
@@ -582,35 +575,23 @@ class MainProgram(QWidget):
         self.questionBankPage.newQuestionAnswerList = QListWidget()
         layout.addRow(self.questionBankPage.newQuestionAnswerInput, self.questionBankPage.newQuestionAnswerList)
 
-        subjectLayout = QFormLayout()
-        subjectButtonGroup = QButtonGroup(self.questionBankPage)
-        self.questionBankPage.subject1Radio = QRadioButton()
-        self.questionBankPage.subject2Radio = QRadioButton()
-        self.questionBankPage.subject1Radio.toggled.connect(self.subjectRadioToggle)
-        self.questionBankPage.subject2Radio.toggled.connect(self.subjectRadioToggle)
-        subjectButtonGroup.addButton(self.questionBankPage.subject1Radio)
-        subjectButtonGroup.addButton(self.questionBankPage.subject2Radio)
-        subjectLayout.addRow("Subject 1", self.questionBankPage.subject1Radio)
-        subjectLayout.addRow("Subject 2", self.questionBankPage.subject2Radio)
-
-        difficultyLayout = QFormLayout()
-        difficultyButtonGroup = QButtonGroup(self.questionBankPage)
-        self.questionBankPage.easyRadio = QRadioButton()
-        self.questionBankPage.mediumRadio = QRadioButton()
-        self.questionBankPage.hardRadio = QRadioButton()
-        self.questionBankPage.easyRadio.toggled.connect(self.difficultyRadioToggle)
-        self.questionBankPage.mediumRadio.toggled.connect(self.difficultyRadioToggle)
-        self.questionBankPage.hardRadio.toggled.connect(self.difficultyRadioToggle)
-        difficultyButtonGroup.addButton(self.questionBankPage.easyRadio)
-        difficultyButtonGroup.addButton(self.questionBankPage.mediumRadio)
-        difficultyButtonGroup.addButton(self.questionBankPage.hardRadio)
-        difficultyLayout.addRow("Easy", self.questionBankPage.easyRadio)
-        difficultyLayout.addRow("Medium", self.questionBankPage.mediumRadio)
-        difficultyLayout.addRow("Hard", self.questionBankPage.hardRadio)
+        colorLayout = QFormLayout()
+        colorButtonGroup = QButtonGroup(self.questionBankPage)
+        self.questionBankPage.yellowRadio = QRadioButton()
+        self.questionBankPage.blueRadio = QRadioButton()
+        self.questionBankPage.redRadio = QRadioButton()
+        self.questionBankPage.yellowRadio.toggled.connect(self.colorRadioToggle)
+        self.questionBankPage.blueRadio.toggled.connect(self.colorRadioToggle)
+        self.questionBankPage.redRadio.toggled.connect(self.colorRadioToggle)
+        colorButtonGroup.addButton(self.questionBankPage.yellowRadio)
+        colorButtonGroup.addButton(self.questionBankPage.blueRadio)
+        colorButtonGroup.addButton(self.questionBankPage.redRadio)
+        colorLayout.addRow("Yellow", self.questionBankPage.yellowRadio)
+        colorLayout.addRow("Blue", self.questionBankPage.blueRadio)
+        colorLayout.addRow("Red", self.questionBankPage.redRadio)
 
         combLayout = QHBoxLayout()
-        combLayout.addLayout(subjectLayout)
-        combLayout.addLayout(difficultyLayout)
+        combLayout.addLayout(colorLayout)
         layout.addRow(combLayout)
 
         self.questionBankPage.definedNewCorrectAnswerDisplay = QLabel()
@@ -710,10 +691,28 @@ class MainProgram(QWidget):
         self.enterQuestionCodePage.currPlayerTurnDisplay = QLabel()
         layout.addRow(self.enterQuestionCodePage.currPlayerTurnDisplay)
 
-        self.enterQuestionCodePage.enterQuestionInput = QLineEdit()
+        enterColorLayout = QFormLayout()
+        enterColorButtonGroup = QButtonGroup(self.enterQuestionCodePage)
+        self.enterQuestionCodePage.yellowRadio = QRadioButton()
+        self.enterQuestionCodePage.blueRadio = QRadioButton()
+        self.enterQuestionCodePage.redRadio = QRadioButton()
+        self.enterQuestionCodePage.yellowRadio.toggled.connect(self.enterColorRadioToggle)
+        self.enterQuestionCodePage.blueRadio.toggled.connect(self.enterColorRadioToggle)
+        self.enterQuestionCodePage.redRadio.toggled.connect(self.enterColorRadioToggle)
+        enterColorButtonGroup.addButton(self.enterQuestionCodePage.yellowRadio)
+        enterColorButtonGroup.addButton(self.enterQuestionCodePage.blueRadio)
+        enterColorButtonGroup.addButton(self.enterQuestionCodePage.redRadio)
+        enterColorLayout.addRow("Yellow", self.enterQuestionCodePage.yellowRadio)
+        enterColorLayout.addRow("Blue", self.enterQuestionCodePage.blueRadio)
+        enterColorLayout.addRow("Red", self.enterQuestionCodePage.redRadio)
+
+        combLayout = QHBoxLayout()
+        combLayout.addLayout(enterColorLayout)
+        layout.addRow(combLayout)
+
         self.enterQuestionCodePage.submitQuestionCodeButton = QPushButton("&Submit Code!")
         self.enterQuestionCodePage.submitQuestionCodeButton.clicked.connect(self.submitQuestionCode)
-        layout.addRow(self.enterQuestionCodePage.enterQuestionInput, self.enterQuestionCodePage.submitQuestionCodeButton)
+        layout.addRow(self.enterQuestionCodePage.submitQuestionCodeButton)
 
         self.enterQuestionCodePage.setLayout(layout)
 
